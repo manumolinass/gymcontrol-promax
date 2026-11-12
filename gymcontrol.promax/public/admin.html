@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymControl - Panel de Administración</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="topbar">
+        <h1>🏋️ GymControl | Panel de Gestión y Rutinas</h1>
+        <div>
+            <span id="userRoleTag" style="margin-right:12px;background:#334155;padding:4px 10px;border-radius:6px;font-size:0.85rem;"></span>
+            <button id="btnLogout" class="sec">Cerrar Sesión</button>
+        </div>
+    </header>
+
+    <div class="layout-dashboard">
+        <!-- Sidebar de Navegación estilo Ideas Integrales -->
+        <aside class="sidebar">
+            <button class="tab-btn activa" onclick="cambiarTab('socios')">👥 Socios (ABM)</button>
+            <button class="tab-btn" onclick="cambiarTab('rutinas')">📋 Rutinas Excel</button>
+            <button class="tab-btn" onclick="cambiarTab('estadisticas')">📊 Analítica de Ingresos</button>
+            <button class="tab-btn" onclick="cambiarTab('config')">⚙️ Cuentas / Personal</button>
+        </aside>
+
+        <main class="content">
+            <!-- TAB SOCIOS ABM -->
+            <section id="tab-socios" class="tab-content">
+                <div class="card">
+                    <h2 id="tituloFormSocio">Alta de Nuevo Socio</h2>
+                    <form id="formSocio" class="form-row">
+                        <input type="hidden" id="socioId">
+                        <input type="text" id="dni" placeholder="DNI" required>
+                        <input type="text" id="nombre" placeholder="Nombre" required>
+                        <input type="text" id="apellido" placeholder="Apellido" required>
+                        <input type="text" id="celular" placeholder="Celular (WhatsApp)" required>
+                        <button type="submit" class="ok" id="btnGuardarSocio">Guardar Socio</button>
+                        <button type="button" id="btnCancelarSocio" class="sec hidden" onclick="resetFormSocio()">Cancelar</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>Nómina de Socios</h2>
+                    <input type="text" id="buscadorSocios" placeholder="Buscar socio por nombre o DNI..." style="width:100%;margin-bottom:12px;" oninput="filtrarSocios()">
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>DNI</th>
+                                    <th>Nombre y Apellido</th>
+                                    <th>Celular</th>
+                                    <th>Último Pago</th>
+                                    <th>Vencimiento</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaSociosBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB RUTINAS EXCEL -->
+            <section id="tab-rutinas" class="tab-content hidden">
+                <div class="card">
+                    <h2>Gestión y Carga de Rutinas en Excel</h2>
+                    <p>Seleccione un socio y suba su planilla de entrenamiento actualizada (.xlsx / .xls).</p>
+                    <div style="margin-top:16px;" class="form-row">
+                        <select id="selectSocioRutina" style="flex:2;padding:10px;border-radius:8px;background:#0f172a;color:#fff;border:1px solid #475569;"></select>
+                        <input type="file" id="archivoExcelInput" accept=".xlsx, .xls" style="flex:2;">
+                        <button onclick="subirRutinaExcel()" class="ok">Subir Rutina</button>
+                    </div>
+                    <div id="msgRutina" style="margin-top:10px;font-weight:bold;"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Socios con Rutina Asignada</h2>
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Socio</th>
+                                    <th>Archivo Excel</th>
+                                    <th>Última Actualización</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaRutinasBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB ESTADISTICAS -->
+            <section id="tab-estadisticas" class="tab-content hidden">
+                <div class="stats">
+                    <div class="stat"><span>Ingresos Hoy</span><b id="statHoy">0</b></div>
+                    <div class="stat"><span>Ingresos del Mes</span><b id="statMes">0</b></div>
+                    <div class="stat"><span>Socios Únicos</span><b id="statUnicos">0</b></div>
+                </div>
+
+                <div class="card">
+                    <h2>Socios Inactivos (> 15 Días sin asistir)</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Socio</th>
+                                <th>DNI</th>
+                                <th>Celular</th>
+                                <th>Último Ingreso</th>
+                                <th>Contacto</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaInactivosBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <h2>Historial Reciente de Accesos</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Hora</th>
+                                <th>Socio</th>
+                                <th>DNI</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaHistorialBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- TAB CONFIGURACION / CUENTAS -->
+            <section id="tab-config" class="tab-content hidden">
+                <div class="card">
+                    <h2>Crear Nueva Cuenta de Profesor o Administrador</h2>
+                    <form id="formAdmin" style="max-width:400px;margin-top:12px;">
+                        <div style="margin-bottom:10px;">
+                            <label>Nombre Completo</label>
+                            <input type="text" id="nuevoNombre" style="width:100%;margin-top:4px;" required>
+                        </div>
+                        <div style="margin-bottom:10px;">
+                            <label>Usuario</label>
+                            <input type="text" id="nuevoUsuario" style="width:100%;margin-top:4px;" required>
+                        </div>
+                        <div style="margin-bottom:10px;">
+                            <label>Contraseña</label>
+                            <input type="password" id="nuevoPassword" style="width:100%;margin-top:4px;" required>
+                        </div>
+                        <div style="margin-bottom:14px;">
+                            <label>Rol</label>
+                            <select id="nuevoRol" style="width:100%;padding:10px;border-radius:8px;background:#0f172a;color:#fff;border:1px solid #475569;margin-top:4px;">
+                                <option value="admin">Administrador</option>
+                                <option value="profesor">Profesor</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="ok">Crear Cuenta</button>
+                    </form>
+                    <div id="msgAdmin" style="margin-top:10px;font-weight:bold;"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        let listaSocios = [];
+
+        async function verificarAuth() {
+            const res = await fetch('/api/auth/estado');
+            const data = await res.json();
+            if (!data.logueado) {
+                window.location.href = 'login.html';
+            }
+            document.getElementById('userRoleTag').innerText = `Rol: ${data.rol || 'admin'}`;
+        }
+        verificarAuth();
+
+        document.getElementById('btnLogout').addEventListener('click', async () => {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            window.location.href = 'login.html';
+        });
+
+        function cambiarTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.sidebar button').forEach(el => el.classList.remove('activa'));
+            document.getElementById('tab-' + tabName).classList.remove('hidden');
+            event.currentTarget.classList.add('activa');
+            if (tabName === 'estadisticas') cargarEstadisticas();
+        }
+
+        // Cargar Socios
+        async function cargarSocios() {
+            const res = await fetch('/api/clientes');
+            if (res.status === 401) return window.location.href = 'login.html';
+            listaSocios = await res.json();
+            renderSocios(listaSocios);
+            llenarSelectSocios(listaSocios);
+        }
+
+        function renderSocios(socios) {
+            const tbody = document.getElementById('tablaSociosBody');
+            tbody.innerHTML = socios.map(c => `
+                <tr>
+                    <td>${c.dni}</td>
+                    <td><b>${c.nombre} ${c.apellido}</b></td>
+                    <td><a href="https://wa.me/${c.celular.replace(/\D/g,'')}" target="_blank" style="color:#22c55e;">💬 ${c.celular}</a></td>
+                    <td>${c.fecha_ultimo_pago}</td>
+                    <td>${c.fecha_vencimiento}</td>
+                    <td><span class="tag ${c.alDia ? 'ok' : 'mal'}">${c.alDia ? 'Al día' : 'Vencido'}</span></td>
+                    <td>
+                        <button onclick="renovarPago(${c.id})" class="ok" title="Renovar Cuota 30 días">💰</button>
+                        <button onclick="editarSocio(${c.id})" class="sec" title="Editar">✏️</button>
+                        <button onclick="eliminarSocio(${c.id})" style="background:#dc2626;" title="Eliminar">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filtrarSocios() {
+            const q = document.getElementById('buscadorSocios').value.toLowerCase();
+            const filtrados = listaSocios.filter(c => c.nombre.toLowerCase().includes(q) || c.apellido.toLowerCase().includes(q) || c.dni.includes(q));
+            renderSocios(filtrados);
+        }
+
+        function llenarSelectSocios(socios) {
+            const sel = document.getElementById('selectSocioRutina');
+            sel.innerHTML = socios.map(c => `<option value="${c.id}">${c.apellido}, ${c.nombre} (DNI: ${c.dni})</option>`).join('');
+            
+            // Cargar también tabla de rutinas
+            const tbodyRutinas = document.getElementById('tablaRutinasBody');
+            tbodyRutinas.innerHTML = socios.map(c => `
+                <tr>
+                    <td><b>${c.nombre} ${c.apellido}</b> (DNI: ${c.dni})</td>
+                    <td>${c.rutina ? `<a href="${c.rutina.ruta_o_url_archivo}" target="_blank">${c.rutina.nombre_archivo}</a>` : 'Sin archivo'}</td>
+                    <td>${c.rutina ? c.rutina.fecha_actualizacion.slice(0,10) : '-'}</td>
+                    <td>
+                        <select onchange="cambiarSocioRutinaSelect(this, ${c.id})" style="padding:4px;background:#0f172a;color:#fff;border-radius:4px;">
+                            <option value="">Acción...</option>
+                        </select>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // ABM Form Submit
+        document.getElementById('formSocio').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('socioId').value;
+            const data = {
+                dni: document.getElementById('dni').value.trim(),
+                nombre: document.getElementById('nombre').value.trim(),
+                apellido: document.getElementById('apellido').value.trim(),
+                celular: document.getElementById('celular').value.trim()
+            };
+
+            const url = id ? `/api/clientes/${id}` : '/api/clientes';
+            const method = id ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                resetFormSocio();
+                cargarSocios();
+            } else {
+                const err = await res.json();
+                alert(err.error || 'Error al guardar');
+            }
+        });
+
+        function editarSocio(id) {
+            const c = listaSocios.find(x => x.id === id);
+            if (!c) return;
+            document.getElementById('socioId').value = c.id;
+            document.getElementById('dni').value = c.dni;
+            document.getElementById('nombre').value = c.nombre;
+            document.getElementById('apellido').value = c.apellido;
+            document.getElementById('celular').value = c.celular;
+            document.getElementById('tituloFormSocio').innerText = 'Editar Socio';
+            document.getElementById('btnGuardarSocio').innerText = 'Actualizar Socio';
+            document.getElementById('btnCancelarSocio').classList.remove('hidden');
+        }
+
+        function resetFormSocio() {
+            document.getElementById('formSocio').reset();
+            document.getElementById('socioId').value = '';
+            document.getElementById('tituloFormSocio').innerText = 'Alta de Nuevo Socio';
+            document.getElementById('btnGuardarSocio').innerText = 'Guardar Socio';
+            document.getElementById('btnCancelarSocio').classList.add('hidden');
+        }
+
+        async function renovarPago(id) {
+            if (!confirm('¿Registrar pago y extender cuota por 30 días?')) return;
+            await fetch(`/api/clientes/${id}/pago`, { method: 'POST' });
+            cargarSocios();
+        }
+
+        async function eliminarSocio(id) {
+            if (!confirm('¿Seguro querés eliminar este socio?')) return;
+            await fetch(`/api/clientes/${id}`, { method: 'DELETE' });
+            cargarSocios();
+        }
+
+        // Subir rutina excel
+        async function subirRutinaExcel() {
+            const clienteId = document.getElementById('selectSocioRutina').value;
+            const fileInput = document.getElementById('archivoExcelInput');
+            const msg = document.getElementById('msgRutina');
+
+            if (!fileInput.files[0]) {
+                alert('Seleccione un archivo Excel');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('archivoExcel', fileInput.files[0]);
+
+            msg.innerText = 'Subiendo rutina...';
+            const res = await fetch(`/api/rutinas/${clienteId}`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (res.ok) {
+                msg.style.color = '#22c55e';
+                msg.innerText = '¡Rutina subida y vinculada correctamente!';
+                fileInput.value = '';
+                cargarSocios();
+            } else {
+                const err = await res.json();
+                msg.style.color = '#ef4444';
+                msg.innerText = err.error || 'Error al subir rutina';
+            }
+        }
+
+        // Estadísticas
+        async function cargarEstadisticas() {
+            const res = await fetch('/api/estadisticas');
+            const data = await res.json();
+            document.getElementById('statHoy').innerText = data.ingresosHoy;
+            document.getElementById('statMes').innerText = data.ingresosMes;
+            document.getElementById('statUnicos').innerText = data.sociosUnicos;
+
+            document.getElementById('tablaInactivosBody').innerHTML = data.inactivos.map(c => `
+                <tr>
+                    <td><b>${c.nombre} ${c.apellido}</b></td>
+                    <td>${c.dni}</td>
+                    <td>${c.celular}</td>
+                    <td>${c.ultimo}</td>
+                    <td><a href="https://wa.me/${c.celular.replace(/\D/g,'')}" target="_blank" style="color:#22c55e;">💬 Contactar</a></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('tablaHistorialBody').innerHTML = data.historial.map(h => `
+                <tr>
+                    <td>${h.fecha_ingreso}</td>
+                    <td>${h.hora_ingreso}</td>
+                    <td><b>${h.clientes ? h.clientes.nombre + ' ' + h.clientes.apellido : 'Socio eliminado'}</b></td>
+                    <td>${h.clientes ? h.clientes.dni : '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Crear Admin / Profesor
+        document.getElementById('formAdmin').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                nombre_completo: document.getElementById('nuevoNombre').value.trim(),
+                usuario: document.getElementById('nuevoUsuario').value.trim(),
+                password: document.getElementById('nuevoPassword').value,
+                rol: document.getElementById('nuevoRol').value
+            };
+            const msg = document.getElementById('msgAdmin');
+            const res = await fetch('/api/auth/registro', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (res.ok) {
+                msg.style.color = '#22c55e';
+                msg.innerText = 'Cuenta creada con éxito';
+                document.getElementById('formAdmin').reset();
+            } else {
+                const err = await res.json();
+                msg.style.color = '#ef4444';
+                msg.innerText = err.error || 'Error al crear cuenta';
+            }
+        });
+
+        cargarSocios();
+    </script>
+</body>
+</html>

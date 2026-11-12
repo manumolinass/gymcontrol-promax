@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymControl - Control de Accesos</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="topbar">
+        <h1>🏋️ GymControl | Recepción</h1>
+        <div>
+            <a href="admin.html" class="btn sec">Panel Administrativo</a>
+        </div>
+    </header>
+
+    <main class="centro">
+        <div class="card">
+            <h2>Control de Accesos</h2>
+            <p>Ingresá el DNI del socio para verificar membresía y asistencia</p>
+            <form id="formConsulta">
+                <input type="text" id="dniInput" placeholder="Inserte DNI del usuario" autocomplete="off" autofocus required>
+                <button type="submit">Consultar Acceso</button>
+            </form>
+            <div id="resultado" class="hidden"></div>
+        </div>
+    </main>
+
+    <script>
+        const form = document.getElementById('formConsulta');
+        const dniInput = document.getElementById('dniInput');
+        const resultado = document.getElementById('resultado');
+
+        // Audio para alertas
+        const playBeep = (ok) => {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = ok ? 'sine' : 'sawtooth';
+                osc.frequency.value = ok ? 587.33 : 220; // Re5 para OK, La3 para error
+                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + (ok ? 0.2 : 0.4));
+            } catch (e) {}
+        };
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const dni = dniInput.value.trim();
+            if (!dni) return;
+
+            try {
+                const res = await fetch('/api/consulta', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dni })
+                });
+                const data = await res.json();
+
+                resultado.classList.remove('hidden', 'ok', 'mal');
+                
+                if (data.existe) {
+                    if (data.access) {
+                        resultado.classList.add('ok');
+                        playBeep(true);
+                        let rutinaHtml = '';
+                        if (data.rutina) {
+                            rutinaHtml = `<p style="margin-top:10px;">📋 Rutina: <a href="${data.rutina.ruta_o_url_archivo}" target="_blank" style="color:#22c55e;font-weight:bold;">Descargar Excel (${data.rutina.nombre_archivo})</a></p>`;
+                        } else {
+                            rutinaHtml = `<p style="margin-top:10px;color:#94a3b8;font-size:0.9rem;">Sin rutina asignada</p>`;
+                        }
+
+                        resultado.innerHTML = `
+                            <h2>✅ ACCESO PERMITIDO</h2>
+                            <p><b>Socio:</b> ${data.nombre}</p>
+                            <p><b>Estado:</b> ${data.estado}</p>
+                            <p><b>Último pago:</b> ${data.ultimoPago} | <b>Vence:</b> ${data.vencimiento}</p>
+                            ${rutinaHtml}
+                        `;
+                    } else {
+                        resultado.classList.add('mal');
+                        playBeep(false);
+                        resultado.innerHTML = `
+                            <h2>❌ ACCESO DENEGADO</h2>
+                            <p><b>Socio:</b> ${data.nombre}</p>
+                            <p><b>Estado:</b> ${data.estado} (Venció el ${data.vencimiento})</p>
+                            <p>Favor de pasar por administración para regularizar pago.</p>
+                        `;
+                    }
+                } else {
+                    resultado.classList.add('mal');
+                    playBeep(false);
+                    resultado.innerHTML = `<h2>❌ DNI NO REGISTRADO</h2><p>${data.mensaje}</p>`;
+                }
+            } catch (err) {
+                alert('Error al conectar con el servidor');
+            }
+            dniInput.value = '';
+            dniInput.focus();
+        });
+    </script>
+</body>
+</html>

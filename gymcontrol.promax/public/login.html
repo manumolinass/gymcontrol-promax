@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymControl - Iniciar Sesión</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="topbar">
+        <h1>🏋️ GymControl | Autenticación</h1>
+        <div><a href="index.html" class="btn sec">← Recepción</a></div>
+    </header>
+
+    <main class="centro">
+        <div class="card">
+            <h2 id="tituloForm">Iniciar Sesión</h2>
+            <p id="subInfo">Ingrese sus credenciales de acceso</p>
+            
+            <form id="formLogin">
+                <div style="margin-bottom:12px;text-align:left;">
+                    <label>Usuario</label>
+                    <input type="text" id="usuario" style="width:100%;margin-top:4px;" required>
+                </div>
+                <div style="margin-bottom:16px;text-align:left;">
+                    <label>Contraseña</label>
+                    <input type="password" id="password" style="width:100%;margin-top:4px;" required>
+                </div>
+                <button type="submit" style="width:100%;">Ingresar al Sistema</button>
+            </form>
+            <div id="msg" class="err" style="margin-top:12px;"></div>
+        </div>
+    </main>
+
+    <script>
+        const form = document.getElementById('formLogin');
+        const tituloForm = document.getElementById('tituloForm');
+        const subInfo = document.getElementById('subInfo');
+        const msg = document.getElementById('msg');
+
+        async function verificarEstado() {
+            const res = await fetch('/api/auth/estado');
+            const data = await res.json();
+            if (!data.hayAdmins) {
+                tituloForm.innerText = 'Crear Administrador Inicial';
+                subInfo.innerText = 'No hay cuentas registradas. Cree la primera.';
+            }
+            if (data.logueado) {
+                window.location.href = 'admin.html';
+            }
+        }
+        verificarEstado();
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const usuario = document.getElementById('usuario').value.trim();
+            const password = document.getElementById('password').value;
+
+            const estadoRes = await fetch('/api/auth/estado');
+            const estadoData = await estadoRes.json();
+
+            const endpoint = estadoData.hayAdmins ? '/api/auth/login' : '/api/auth/registro';
+
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ usuario, password, nombre_completo: usuario, rol: 'admin' })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                window.location.href = 'admin.html';
+            } else {
+                msg.innerText = data.error || 'Ocurrió un error';
+            }
+        });
+    </script>
+</body>
+</html>
