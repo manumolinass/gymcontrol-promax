@@ -15,7 +15,8 @@
         </div>
     </header>
 
-    <div class="layout-dashboard">
+    <div id="loadingOverlay" style="text-align:center;padding:80px 20px;font-size:1.2rem;color:#94a3b8;">Verificando acceso...</div>
+    <div class="layout-dashboard" id="dashboardContainer" style="display:none;">
         <!-- Sidebar de Navegación estilo Ideas Integrales -->
         <aside class="sidebar">
             <button class="tab-btn activa" onclick="cambiarTab('socios')">👥 Socios (ABM)</button>
@@ -166,20 +167,56 @@
     </div>
 
     <script>
+        // Interceptor para enviar automáticamente el token de autenticación
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options = {}) {
+            options = options || {};
+            options.headers = options.headers || {};
+            const token = localStorage.getItem('gym_token');
+            if (token) {
+                if (options.headers instanceof Headers) {
+                    if (!options.headers.has('Authorization')) {
+                        options.headers.set('Authorization', `Bearer ${token}`);
+                    }
+                } else if (Array.isArray(options.headers)) {
+                    options.headers.push(['Authorization', `Bearer ${token}`]);
+                } else {
+                    if (!options.headers['Authorization']) {
+                        options.headers['Authorization'] = `Bearer ${token}`;
+                    }
+                }
+            }
+            return originalFetch(url, options);
+        };
+
         let listaSocios = [];
 
         async function verificarAuth() {
-            const res = await fetch('/api/auth/estado');
-            const data = await res.json();
-            if (!data.logueado) {
+            try {
+                const res = await fetch('/api/auth/estado');
+                const data = await res.json();
+                if (!data.logueado) {
+                    localStorage.removeItem('gym_token');
+                    window.location.href = 'login.html';
+                    return;
+                }
+                document.getElementById('userRoleTag').innerText = `Rol: ${data.rol || 'admin'}`;
+                const loader = document.getElementById('loadingOverlay');
+                if (loader) loader.style.display = 'none';
+                const dash = document.getElementById('dashboardContainer');
+                if (dash) dash.style.display = 'flex';
+                cargarSocios();
+            } catch (e) {
                 window.location.href = 'login.html';
             }
-            document.getElementById('userRoleTag').innerText = `Rol: ${data.rol || 'admin'}`;
         }
         verificarAuth();
 
         document.getElementById('btnLogout').addEventListener('click', async () => {
-            await fetch('/api/auth/logout', { method: 'POST' });
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (e) {}
+            localStorage.removeItem('gym_token');
             window.location.href = 'login.html';
         });
 
@@ -392,8 +429,6 @@
                 msg.innerText = err.error || 'Error al crear cuenta';
             }
         });
-
-        cargarSocios();
     </script>
 </body>
 </html>

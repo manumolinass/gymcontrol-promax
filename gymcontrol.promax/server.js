@@ -3,9 +3,11 @@ const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const multer = require('multer');
+const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -15,6 +17,50 @@ app.use(session({
   saveUninitialized: false,
   cookie: { httpOnly: true, maxAge: 8 * 3600 * 1000 }
 }));
+
+// Funciones para autenticación persistente y sin estado (stateless tokens para Vercel Serverless)
+const JWT_SECRET = process.env.SESSION_SECRET || 'clave-secreta-gymcontrol-super-segura-2026';
+
+function crearToken(payload) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const data = Buffer.from(JSON.stringify({
+    ...payload,
+    exp: Date.now() + 24 * 3600 * 1000 // 24 horas
+  })).toString('base64url');
+  const sig = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${data}`).digest('base64url');
+  return `${header}.${data}.${sig}`;
+}
+
+function verificarToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [header, data, sig] = parts;
+  const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${data}`).digest('base64url');
+  if (sig !== expectedSig) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch (e) {
+    return null;
+  }
+}
+
+function obtenerUsuario(req) {
+  let token = null;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.slice(7);
+  } else if (req.headers.cookie) {
+    const match = req.headers.cookie.match(/gym_session=([^;]+)/);
+    if (match) token = match[1];
+  }
+  if (!token && req.session && req.session.adminId) {
+    return { adminId: req.session.adminId, rol: req.session.rol };
+  }
+  return verificarToken(token);
+}
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -49,7 +95,12 @@ const DIAS_CUOTA = 30;
 
 // Middleware de autenticación
 const auth = (req, res, next) => {
-  if (req.session && req.session.adminId) {
+  const user = obtenerUsuario(req);
+  if (user && user.adminId) {
+    req.user = user;
+    if (!req.session) req.session = {};
+    req.session.adminId = user.adminId;
+    req.session.rol = user.rol;
     next();
   } else {
     res.status(401).json({ error: 'No autorizado. Inicie sesión.' });
@@ -58,10 +109,15 @@ const auth = (req, res, next) => {
 
 // ==================== RUTAS DE AUTENTICACIÓN ====================
 app.get('/api/auth/estado', async (req, res) => {
-  if (!supabase) return res.json({ hayAdmins: false, logueado: !!req.session.adminId });
+  const user = obtenerUsuario(req);
+  if (!supabase) return res.json({ hayAdmins: false, logueado: !!(user && user.adminId) });
   try {
     const { count, error } = await supabase.from('usuarios_sistema').select('*', { count: 'exact', head: true });
-    res.json({ hayAdmins: (count || 0) > 0, logueado: !!req.session.adminId, rol: req.session.rol || null });
+    res.json({
+      hayAdmins: (count || 0) > 0,
+      logueado: !!(user && user.adminId),
+      rol: user ? (user.rol || 'admin') : null
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -79,7 +135,8 @@ app.post('/api/auth/registro', async (req, res) => {
 
   try {
     const { count } = await supabase.from('usuarios_sistema').select('*', { count: 'exact', head: true });
-    if (count > 0 && !req.session.adminId) {
+    const user = obtenerUsuario(req);
+    if (count > 0 && !(user && user.adminId)) {
       return res.status(403).json({ error: 'Solo un administrador puede crear nuevas cuentas.' });
     }
 
@@ -95,11 +152,15 @@ app.post('/api/auth/registro', async (req, res) => {
 
     if (error) throw error;
 
+    const token = crearToken({ adminId: data.id, rol: data.rol });
+    res.setHeader('Set-Cookie', `gym_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400; Secure`);
+
     if (count === 0) {
+      if (!req.session) req.session = {};
       req.session.adminId = data.id;
       req.session.rol = data.rol;
     }
-    res.json({ ok: true });
+    res.json({ ok: true, rol: data.rol, token });
   } catch (e) {
     res.status(409).json({ error: 'El usuario ya existe o error en base de datos: ' + e.message });
   }
@@ -116,16 +177,25 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
     }
 
+    const token = crearToken({ adminId: admin.id, rol: admin.rol });
+    res.setHeader('Set-Cookie', `gym_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400; Secure`);
+
+    if (!req.session) req.session = {};
     req.session.adminId = admin.id;
     req.session.rol = admin.rol;
-    res.json({ ok: true, rol: admin.rol });
+    res.json({ ok: true, rol: admin.rol, token });
   } catch (e) {
     res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
   }
 });
 
 app.post('/api/auth/logout', (req, res) => {
-  req.session.destroy(() => res.json({ ok: true }));
+  res.setHeader('Set-Cookie', 'gym_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure');
+  if (req.session) {
+    req.session.destroy(() => res.json({ ok: true }));
+  } else {
+    res.json({ ok: true });
+  }
 });
 
 // ==================== CONSULTA PÚBLICA / RECEPCIÓN POR DNI ====================
