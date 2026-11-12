@@ -356,4 +356,8 @@ app.get('/api/estadisticas', auth, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor GymControl corriendo en puerto ${PORT}`));
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  app.listen(PORT, () => console.log(`Servidor GymControl corriendo en puerto ${PORT}`));
+}
+
+module.exports = app;
